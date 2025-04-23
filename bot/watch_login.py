@@ -7,7 +7,7 @@ API_ID = 23416622  # ganti dengan API_ID kamu
 API_HASH = 'd1bc12a03ea26416b38b4616a36112b0'  # ganti dengan API_HASH kamu
 
 # Folder tempat sesi-sesi disimpan
-SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'cek')
+SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'logout')
 
 async def monitor_sessions():
     session_files = [f for f in os.listdir(SESSION_FOLDER) if f.endswith('.session')]

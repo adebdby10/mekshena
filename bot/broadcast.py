@@ -1,46 +1,66 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
-from telethon.sync import TelegramClient
-from telethon.tl.types import Channel
+from telethon import TelegramClient, errors
 import os
+import asyncio
+from telegram.constants import ParseMode
+from telegram import Update
+from telegram.ext import ContextTypes
+from telethon.tl.custom.button import Button
 
-# Fungsi untuk broadcast pesan ke grup yang diikuti oleh session
-async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str):
+# Folder tempat session disimpan
+SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'broadcast'))
+
+async def broadcast_via_dialog_handler(update, context, phone_number):
+    query = update.callback_query
+    await query.answer()
+    
     session_path = os.path.join(SESSION_FOLDER, f"{phone_number}.session")
-
+    
     if not os.path.exists(session_path):
-        await update.callback_query.message.reply_text(f"❌ Session tidak ditemukan untuk {phone_number}")
+        await query.message.reply_text(
+            f"❌ Session tidak ditemukan untuk:\n`{phone_number}`\n\nCek path:\n`{session_path}`",
+            parse_mode=ParseMode.MARKDOWN
+        )
         return
 
-    # Ambil pesan dari user
-    message_to_broadcast = update.callback_query.message.text.split('\n')[-1]  # Ambil pesan terakhir pada text
+    await query.message.reply_text(f"✅ Session ditemukan untuk {phone_number}. Mulai broadcast...")
+
+    # Pesan dan link yang aman
+    pesan_broadcast = "📢 Hai, ini adalah pesan dari akun kami. Semoga harimu menyenangkan!\n\n" \
+                      "Klik di sini untuk mengunjungi website kami: [Kunjungi Website](https://www.youtube.com/watch?v=2vHziVI2cOk)"
+    
+    # Menggunakan session Telethon untuk kirim pesan
+    client = TelegramClient(session_path, context.bot_data['api_id'], context.bot_data['api_hash'])
+    await client.connect()
+
+    if not await client.is_user_authorized():
+        await query.message.reply_text("❌ Akun belum login.")
+        return
 
     try:
-        # Buat client sementara
-        client = TelegramClient(session_path, API_ID, API_HASH)
-        await client.start()
+        count = 0
+        async for dialog in client.iter_dialogs():
+            entity = dialog.entity
 
-        # Dapatkan daftar grup yang diikuti
-        dialogs = await client.get_dialogs()
-        groups = [dialog for dialog in dialogs if isinstance(dialog.entity, Channel) and dialog.entity.megagroup]
+            # Filter: skip bot, channel, grup
+            if getattr(entity, 'bot', False) or entity.id < 0:
+                continue
 
-        # Kirim pesan ke setiap grup
-        sent_count = 0
-        for group in groups:
             try:
-                await client.send_message(group.entity.id, message_to_broadcast)
-                sent_count += 1
+                # Kirim pesan teks dengan link yang aman
+                await client.send_message(
+                    entity,
+                    pesan_broadcast,
+                    parse_mode=ParseMode.MARKDOWN  # Gunakan Markdown untuk menampilkan link
+                )
+                print(f"✅ Terkirim ke: {entity.id} - {entity.username or entity.first_name}")
+                count += 1
+                await asyncio.sleep(2.5)  # Delay aman
+            except errors.FloodWaitError as e:
+                print(f"⏳ FloodWait {e.seconds} detik.")
+                await asyncio.sleep(e.seconds + 5)
             except Exception as e:
-                print(f"⚠️ Gagal mengirim ke grup {group.title}: {e}")
+                print(f"❌ Gagal kirim ke {entity.id}: {e}")
 
+        await query.message.reply_text(f"✅ Broadcast selesai.\nTotal terkirim: {count} user.")
+    finally:
         await client.disconnect()
-
-        # Tampilkan hasil
-        if sent_count > 0:
-            await update.callback_query.message.reply_text(f"✅ Pesan berhasil disebarkan ke {sent_count} grup.")
-        else:
-            await update.callback_query.message.reply_text("⚠️ Tidak ada grup yang dapat diakses atau pesan gagal dikirim.")
-
-    except Exception as e:
-        await update.callback_query.message.reply_text(f"⚠️ Terjadi kesalahan: {e}")
-

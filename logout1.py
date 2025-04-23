@@ -8,9 +8,9 @@ API_ID = 23416622
 API_HASH = 'd1bc12a03ea26416b38b4616a36112b0'
 
 # Nama perangkat HP kamu (gunakan lowercase)
-DEVICE_NAME = "tecno pova 6 pro 5g"
+DEVICE_NAME = "pc 64bit"
 
-SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'cek')
+SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'kick')
 
 async def logout_session(session_path):
     client = TelegramClient(session_path, API_ID, API_HASH)

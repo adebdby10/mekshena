@@ -1,0 +1,1 @@
+SET_PASSWORD = 1
