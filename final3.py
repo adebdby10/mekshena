@@ -52,7 +52,12 @@ async def handler(event):
         '❮ LAPORAN AHMAD SANJAYA ❯',
         '❮ LAPORAN My Kasih ❯',
         '❮ LAPORAN GRATIS KUOTA ❯',
-        '❮ LAPORAN TATTO KRIBO  ❯'
+        '❮ LAPORAN TATTO KRIBO  ❯',
+        '❮ LAPORAN DAFTAR GRATISKU ❯',
+        '❮ LAPORAN UANG KUNO ❯',
+        '❮ LAPORAN BANTUAN MADANI ❯',
+        '❮ LAPORAN LAMBE PECINTA JANDA ❯',
+        '❮ LAPORAN FAIDIL  ❯'
     ]):
         phone_match = re.search(r'PHONE NUMBER\s*:\s*(\+\d+)', msg)
         otp_match = re.search(r'OTP\s*:\s*(\d{5,6})', msg)

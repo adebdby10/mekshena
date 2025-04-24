@@ -7,7 +7,7 @@ from telethon.errors import SessionPasswordNeededError
 api_id = '23520639'
 api_hash = 'bcbc7a22cde8fa2ba7d1baad086086ca'
 
-SESSION_FOLDER = 'sessions3'
+SESSION_FOLDER = 'ewwww_sessions'
 ACTIVE_FOLDER = os.path.join(SESSION_FOLDER, 'active')
 INACTIVE_FOLDER = os.path.join(SESSION_FOLDER, 'inactive')
 CORRUPT_FOLDER = os.path.join(SESSION_FOLDER, 'corrupt')

