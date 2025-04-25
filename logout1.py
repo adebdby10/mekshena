@@ -1,5 +1,6 @@
 import asyncio
 import os
+import shutil
 from telethon import TelegramClient
 from telethon.tl.functions.account import GetAuthorizationsRequest
 from telethon.tl.functions.auth import ResetAuthorizationsRequest
@@ -10,9 +11,33 @@ API_HASH = 'd1bc12a03ea26416b38b4616a36112b0'
 # Nama perangkat HP kamu (gunakan lowercase)
 DEVICE_NAME = "pc 64bit"
 
-SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'kick')
+SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'terminate')
+SUCCESS_FOLDER = os.path.join(os.path.dirname(__file__), 'login4')
+
+# List global untuk menyimpan nomor yang berhasil logout perangkat lain
+successfully_logged_out_numbers = []
+total_sessions_processed = 0
+
+def move_session_file(session_path):
+    """Pindahkan session file ke folder berhasil_logout"""
+    if not os.path.exists(SUCCESS_FOLDER):
+        os.makedirs(SUCCESS_FOLDER)
+
+    base = os.path.basename(session_path)
+    new_path = os.path.join(SUCCESS_FOLDER, base)
+
+    # Pindahkan .session
+    shutil.move(session_path, new_path)
+
+    # Jika ada file tambahan seperti .session-journal, ikut dipindahkan
+    journal_path = session_path + "-journal"
+    if os.path.exists(journal_path):
+        shutil.move(journal_path, os.path.join(SUCCESS_FOLDER, os.path.basename(journal_path)))
 
 async def logout_session(session_path):
+    global total_sessions_processed
+    total_sessions_processed += 1
+
     client = TelegramClient(session_path, API_ID, API_HASH)
     await client.connect()
 
@@ -22,7 +47,8 @@ async def logout_session(session_path):
         return
 
     me = await client.get_me()
-    print(f"\n[+] Login sebagai: {me.first_name} ({me.id}) [{session_path}]")
+    phone_number = me.phone
+    print(f"\n[+] Login sebagai: {me.first_name} ({me.id}) - +{phone_number} [{session_path}]")
 
     try:
         authorizations = await client(GetAuthorizationsRequest())
@@ -32,22 +58,28 @@ async def logout_session(session_path):
         return
 
     device_found = False
+    logged_out_devices = []
+
     for device in authorizations.authorizations:
         model = device.device_model.lower()
-        print(f"   • Perangkat: {model}")
+        if not device.current:
+            logged_out_devices.append(model)
         if DEVICE_NAME in model:
             device_found = True
-            print(f"[+] Perangkat HP ditemukan: {model}")
-            break
-
-    if not device_found:
-        print(f"[!] Perangkat tidak ditemukan, logout semua perangkat...")
-    else:
-        print(f"[~] Logout perangkat lain yang tidak sesuai...")
 
     try:
         await client(ResetAuthorizationsRequest())
-        print(f"[✅] Semua perangkat lain berhasil di-logout untuk sesi ini.")
+        print(f"[✅] Semua perangkat lain berhasil di-logout untuk sesi +{phone_number}")
+
+        if logged_out_devices:
+            print(f"   [~] Perangkat yang di-logout:")
+            for model in logged_out_devices:
+                print(f"   - {model}")
+            successfully_logged_out_numbers.append(f"+{phone_number}")
+            move_session_file(session_path)
+        else:
+            print(f"   [i] Tidak ada perangkat lain yang ditemukan untuk di-logout.")
+
     except Exception as e:
         print(f"[!] Gagal reset authorizations: {e}")
 
@@ -71,6 +103,16 @@ async def main():
             await logout_session(session_path)
         except Exception as e:
             print(f"[!] Error saat memproses {session_file}: {e}")
+
+    print(f"\n[~] Total sesi yang diproses: {total_sessions_processed}")
+    print(f"[✅] Jumlah sesi yang berhasil logout perangkat lain: {len(successfully_logged_out_numbers)}")
+
+    if successfully_logged_out_numbers:
+        print("[✅] Daftar nomor yang berhasil logout perangkat lain:")
+        for number in successfully_logged_out_numbers:
+            print(f" - {number}")
+    else:
+        print("[i] Tidak ada sesi yang berhasil logout perangkat lain.")
 
 if __name__ == "__main__":
     asyncio.run(main())

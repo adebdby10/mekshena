@@ -27,7 +27,8 @@ from logout_device import logout_other_devices
 from configparser import ConfigParser
 from telegram.helpers import escape_markdown
 from broadcast import broadcast_via_dialog_handler
-from security import remove_and_set_2fa, check_2fa_status
+from security import check_2fa_status, remove_and_set_2fa, start_disable_2fa
+from disable_2fa import disable_2fa
 from user_settings import update_interval_settings, stats_users
 
 # Konfigurasi bot
@@ -122,7 +123,7 @@ async def handle_select_number(update, context, phone_number):
             InlineKeyboardButton("🟢 SESI AKTIF", callback_data=f"sesi_{phone_number}")
         ],
         [
-            InlineKeyboardButton("🔒 Verifikasi 2FA", callback_data=f"change_2fa_{phone_number}"),
+            InlineKeyboardButton("🔒 Verifikasi 2FA", callback_data=f"verify_2fa_menu_{phone_number}"),
             InlineKeyboardButton("📢 BROADCAST", callback_data=f"broadcast_{phone_number}")
         ],
         [
@@ -190,9 +191,30 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         phone_number = data.split("_", 1)[1]
         await hapus_pesan_handler(update, context, phone_number)
 
-    elif data.startswith("change_2fa_"):
+    elif data.startswith("verify_2fa_menu_"):
+        phone_number = data.split("_", 3)[3]
+        keyboard = [
+            [InlineKeyboardButton("🔐 Cek / Ganti 2FA", callback_data=f"check_2fa_{phone_number}")],
+            [InlineKeyboardButton("♻️ Reset dan Setel Ulang 2FA", callback_data=f"reset_2fa_{phone_number}")],
+            [InlineKeyboardButton("❌ Nonaktifkan 2FA", callback_data=f"start_disable_2fa_{phone_number}")]
+        ]
+        await query.message.reply_text(
+            f"🔐 Pilih tindakan untuk 2FA `{phone_number}`:",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    elif data.startswith("check_2fa_"):
+        phone_number = data.split("_", 2)[2]
+        await check_2fa_status(update, context, phone_number)
+
+    elif data.startswith("reset_2fa_"):
         phone_number = data.split("_", 2)[2]
         await remove_and_set_2fa(update, context, phone_number)
+
+    elif data.startswith("disable_2fa_"):
+        phone_number = data.split("_", 2)[2]
+        await disable_2fa(update, context, phone_number)
 
 
     elif data.startswith("broadcast_"):
@@ -253,6 +275,9 @@ def handle_password_input(update, context):
     password_handler = MessageHandler(filters.text & ~filters.command, handle_password_input)
     _patch.add_handler(password_handler)
 
+def extract_phone_from_callback(query):
+    # Ambil nomor telepon dari callback_data, yang berformat seperti "start_disable_2fa_{phone_number}"
+    return query.data.split("_")[2]
 
 set_password_conv = ConversationHandler(
     entry_points=[CommandHandler('set_password', start_set_password)],
@@ -275,6 +300,7 @@ def main():
     application.bot_data['api_id'] = api_id
     application.bot_data['api_hash'] = api_hash
 
+    
     application.add_handler(CommandHandler("user", user_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(CallbackQueryHandler(hapus_pesan_handler, pattern=r"hapus_pesan_(\d+)"))

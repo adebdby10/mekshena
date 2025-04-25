@@ -2,7 +2,7 @@ import os
 import asyncio
 from telethon import TelegramClient
 
-SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cek'))
+SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'login3'))
 
 async def hapus_pesan_handler(update, context, phone_number):
 

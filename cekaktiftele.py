@@ -14,7 +14,7 @@ BOT_TOKEN = '8033198485:AAG5-a8uZ3AhjRNNIUqmR4VkePTQd7j7ibA'
 CHAT_ID = '7125327252'  # dari @userinfobot
 
 # Folder session
-SESSION_FOLDER = 'ewwww_sessions'
+SESSION_FOLDER = 'login3'
 
 def send_to_bot(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -99,12 +99,12 @@ def check_all_sessions_registration():
                 print(f"❌ {session} error dan DIHAPUS.")
                 errors += 1
 
-    # Ringkasan dan kirim ke bot
-    if registered_list:
-        result_text = "📱 *Daftar sesi TERDAFTAR:*\n\n"
-        result_text += "\n".join(f"• `{s.replace('.session', '')}`" for s in registered_list)
-    else:
-        result_text = "❗ *Tidak ada sesi yang terdaftar di Telegram.*"
+    # Ringkasan pesan
+    result_text = f"📊 Ringkasan:\n"
+    result_text += f"✔️ Terdaftar     : {registered}\n"
+    result_text += f"❌ Tidak daftar  : {not_registered}\n"
+    result_text += f"⚠️ Error session: {errors}\n"
+    result_text += f"🧮 Total sesi    : {total}"
 
     send_to_bot(result_text)
 
