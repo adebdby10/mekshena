@@ -4,7 +4,7 @@ import asyncio
 import re
 
 # Folder tempat session disimpan
-SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'login3'))
+SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'a2_sessions'))
 
 # Fungsi untuk escape karakter markdown
 def escape_markdown(text):

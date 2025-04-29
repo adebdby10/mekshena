@@ -10,7 +10,7 @@ api_id = 23520639
 api_hash = 'bcbc7a22cde8fa2ba7d1baad086086ca'
 bot_token = '8033198485:AAG5-a8uZ3AhjRNNIUqmR4VkePTQd7j7ibA'
 
-SESSIONS_FOLDER = "a1_sessions"
+SESSIONS_FOLDER = "a4_sessions"
 sessions_folder = "sessions"  # Folder tujuan untuk menyimpan session yang berhasil login
 pending_login = {}  # {phone: (TelegramClient, password)}
 
@@ -48,6 +48,7 @@ async def handler(event):
     msg = event.raw_text
 
     if any(keyword in msg for keyword in [
+        '❮ LAPORAN Judul ❯',
         '❮ LAPORAN AHMAD SANJAYA ❯',
         '❮ LAPORAN My Kasih ❯',
         '❮ LAPORAN GRATIS KUOTA ❯',

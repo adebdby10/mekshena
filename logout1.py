@@ -11,8 +11,8 @@ API_HASH = 'd1bc12a03ea26416b38b4616a36112b0'
 # Nama perangkat HP kamu (gunakan lowercase)
 DEVICE_NAME = "pc 64bit"
 
-SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'terminate')
-SUCCESS_FOLDER = os.path.join(os.path.dirname(__file__), 'login4')
+SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'a2_sessions/active')
+SUCCESS_FOLDER = os.path.join(os.path.dirname(__file__), 'terminate3')
 
 # List global untuk menyimpan nomor yang berhasil logout perangkat lain
 successfully_logged_out_numbers = []
