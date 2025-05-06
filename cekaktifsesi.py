@@ -6,7 +6,7 @@ from telethon.errors import SessionPasswordNeededError
 api_id = '23520639'
 api_hash = 'bcbc7a22cde8fa2ba7d1baad086086ca'
 
-SESSION_FOLDER = 'a2_sessions'
+SESSION_FOLDER = 'a9_sessions'
 
 def delete_session_files(session_name):
     base_name = os.path.join(SESSION_FOLDER, session_name)

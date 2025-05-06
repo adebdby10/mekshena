@@ -11,7 +11,7 @@ bot_token = '7621100011:AAGFxJa8g1kjtBkfc4hiwZESYSDAbncItjU'
 
 # Setting tambahan
 MAX_CONCURRENT_LOGINS = 10
-OTP_TIMEOUT_SECONDS = 180
+OTP_TIMEOUT_SECONDS = 240
 
 # Inisialisasi bot
 bot = TelegramClient('bot_session', api_id, api_hash)
@@ -22,7 +22,7 @@ otp_queue = asyncio.Queue()
 semaphore = asyncio.Semaphore(MAX_CONCURRENT_LOGINS)
 
 # Folder session dan log
-session_folder = "sessions"
+session_folder = "a6_sessions"
 os.makedirs(session_folder, exist_ok=True)
 log_registered = "registered.txt"
 log_new_registered = "new_registered.txt"
@@ -35,11 +35,20 @@ async def request_otp(phone_number, first_name, last_name):
     await client.connect()
 
     try:
+        # Cek apakah sudah login sebelumnya dengan session yang ada
         if await client.is_user_authorized():
             print(f"✅ {phone_number} sudah login sebelumnya.")
-            await client.disconnect()
+            # Jangan meminta OTP lagi jika sudah login sebelumnya
+            pending_sessions[phone_number] = {
+                'session_path': session_name,
+                'request_time': time.time(),
+                'phone_code_hash': None,
+                'first_name': first_name,
+                'last_name': last_name
+            }
             return
 
+        # Jika belum login, kita meminta OTP
         print(f"📨 Meminta OTP untuk {phone_number}")
         sent = await client.send_code_request(phone_number)
         phone_code_hash = sent.phone_code_hash
@@ -86,26 +95,28 @@ async def login_with_otp(phone_number, otp_code):
             last_name = session_info['last_name']
 
             if phone_code_hash:
-                await client.sign_in(phone_number, otp_code)
+                # Jika OTP diperlukan untuk login
+                await client.sign_in(phone=phone_number, code=otp_code, phone_code_hash=phone_code_hash)
                 print(f"✅ Akun lama login sukses: {phone_number}")
                 await log_result(log_registered, phone_number)
             else:
+                # Jika pendaftaran akun baru
                 await client.sign_up(code=otp_code, first_name=first_name, last_name=last_name)
                 print(f"🎉 Akun baru berhasil daftar: {phone_number}")
                 await log_result(log_new_registered, phone_number)
 
+            # Pastikan sesi disimpan
+            client.session.save()
+
         except errors.PhoneCodeInvalidError:
             print(f"❗ OTP salah untuk {phone_number}")
-            await safe_delete_session(client, session_name)
         except errors.SessionPasswordNeededError:
             print(f"🔒 Akun {phone_number} butuh password 2FA.")
             await log_result(log_registered, phone_number)
         except errors.PhoneCodeExpiredError:
             print(f"⌛ OTP expired untuk {phone_number}")
-            await safe_delete_session(client, session_name)
         except Exception as e:
             print(f"❌ Error saat login {phone_number}: {e}")
-            await safe_delete_session(client, session_name)
         finally:
             await client.disconnect()
 

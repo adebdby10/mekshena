@@ -1,8 +1,7 @@
 from telethon.sync import TelegramClient
 import os
+from config import SESSION_FOLDER
 
-# Tentukan folder sesi
-SESSION_FOLDER = os.path.join(os.path.dirname(__file__), '..', 'ew_sessions')
 
 # Ganti dengan API_ID dan API_HASH kamu
 api_id = '23416622'

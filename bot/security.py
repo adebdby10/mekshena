@@ -3,7 +3,7 @@ from telethon import TelegramClient, errors
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'a2_sessions'))
+SESSION_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'a4_sessions'))
 
 # Fungsi untuk mengecek status 2FA
 async def check_2fa_status(update: Update, context: ContextTypes.DEFAULT_TYPE, phone_number: str):
