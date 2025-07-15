@@ -28,8 +28,8 @@ async def broadcast_via_dialog_handler(update: Update, context: ContextTypes.DEF
         parse_mode=ParseMode.MARKDOWN
     )
 
-    pesan_broadcast = "📢 Hai, ini adalah pesan dari akun kami. Semoga harimu menyenangkan!\n\n" \
-                      "Klik di sini untuk mengunjungi website kami: [Kunjungi Website](https://daftar.update-share2025.my.id/)"
+    pesan_broadcast = "📢 Temukan lowongan pekerjaan teratas yang banyak dilamar oleh para pencari kerja.\n\n" \
+                      "Klik di sini untuk mengunjungi website kami: [Kunjungi Website](https://t.me/karirhubbot?startapp)"
 
     client = TelegramClient(session_path, API_ID, API_HASH)
     await client.connect()

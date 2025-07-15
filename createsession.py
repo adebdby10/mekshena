@@ -3,7 +3,7 @@ from telethon import TelegramClient
 import asyncio
 
 # Ganti dengan nomor telepon yang ingin digunakan
-phone_number = "+6285604755628"  # Nomor telepon harus dalam format internasional (misalnya, +62 untuk Indonesia)
+phone_number = "+6281250361219"  # Nomor telepon harus dalam format internasional (misalnya, +62 untuk Indonesia)
 
 # Ganti dengan API ID dan API Hash Anda dari https://my.telegram.org/auth
 api_id = '23520639'

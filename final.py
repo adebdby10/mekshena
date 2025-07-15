@@ -3,7 +3,7 @@ import json
 import os
 import re
 import threading
-from flask import Flask, request
+from flask import Flask, request # type: ignore
 import requests
 
 from telethon import TelegramClient, events
