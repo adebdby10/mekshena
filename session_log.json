@@ -1,0 +1,106 @@
+{
+  "+6282114351541": {
+    "status": "FAILED",
+    "message": "Gagal login: The phone code entered was invalid (caused by SignInRequest)"
+  },
+  "+6282181505929": {
+    "status": "FAILED",
+    "message": "Gagal login: The confirmation code has expired (caused by SignInRequest)"
+  },
+  "+6287830099707": {
+    "status": "FAILED",
+    "message": "Gagal login: [WinError 32] The process cannot access the file because it is being used by another process: 'sessions\\\\+6287830099707.session'"
+  },
+  "+60105905793": {
+    "status": "FAILED",
+    "message": "2FA diperlukan"
+  },
+  "+6285714525658": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  },
+  "+6079464643344": {
+    "status": "FAILED",
+    "message": "OTP request failed: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  "+971392003915": {
+    "status": "FAILED",
+    "message": "OTP request failed: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  "+60683434343": {
+    "status": "FAILED",
+    "message": "OTP request failed: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  "+971555054144": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  },
+  "+628119660315": {
+    "status": "FAILED",
+    "message": "Login gagal: [WinError 32] The process cannot access the file because it is being used by another process: 'sessions\\\\+628119660315.session'"
+  },
+  "+6282219447455": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  },
+  "+971505861895": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  },
+  "+6285817237185": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  },
+  "+6287792480160": {
+    "status": "FAILED",
+    "message": "Login gagal: [WinError 32] The process cannot access the file because it is being used by another process: 'sessions\\\\+6287792480160.session'"
+  },
+  "+6282138660865": {
+    "status": "FAILED",
+    "message": "Login gagal: [WinError 32] The process cannot access the file because it is being used by another process: 'sessions\\\\+6282138660865.session'"
+  },
+  "+6077777777777": {
+    "status": "FAILED",
+    "message": "OTP request failed: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  "+97158869595248": {
+    "status": "FAILED",
+    "message": "OTP request failed: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  "+60182425017": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  },
+  "+6282295894100": {
+    "status": "FAILED",
+    "message": "Login gagal: [WinError 32] The process cannot access the file because it is being used by another process: 'sessions\\\\+6282295894100.session'"
+  },
+  "+6287837261878": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  },
+  "+604613464994": {
+    "status": "FAILED",
+    "message": "OTP request failed: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  "+6285606274619": {
+    "status": "FAILED",
+    "message": "Login gagal: [WinError 32] The process cannot access the file because it is being used by another process: 'sessions\\\\+6285606274619.session'"
+  },
+  "+601116629194": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  },
+  "+609464646464": {
+    "status": "FAILED",
+    "message": "OTP request failed: The phone number is invalid (caused by SendCodeRequest)"
+  },
+  "+600126416651": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  },
+  "+6287883968247": {
+    "status": "FAILED",
+    "message": "OTP salah"
+  }
+}
