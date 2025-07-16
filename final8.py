@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import shutil
+import random
 from telethon import TelegramClient, events
 from telethon.errors import (
     PhoneNumberUnoccupiedError, SessionPasswordNeededError, PhoneCodeInvalidError
@@ -53,28 +54,57 @@ def is_valid_phone_number(phone):
     return False
 
 # Spoof device
-async def apply_spoof_device(client, phone, fallback_model="Pixel 5"):
+DEVICE_LIST = [
+    ("Samsung Galaxy S21", "Android 13"),
+    ("Samsung Galaxy A52", "Android 11"),
+    ("Xiaomi Redmi Note 10", "Android 12"),
+    ("OPPO Reno 6", "Android 11"),
+    ("Vivo Y20", "Android 10"),
+    ("Realme 8", "Android 11"),
+    ("Asus ROG Phone 5", "Android 12"),
+    ("OnePlus Nord", "Android 11"),
+    ("Google Pixel 5", "Android 11"),
+    ("Huawei P30", "Android 10")
+]
+
+async def apply_spoof_device(client, phone):
     try:
         await client.connect()
+
+        # Jika memungkinkan, ambil dari session sebelumnya
         if hasattr(client, "_init_connection"):
-            auths = await client(GetAuthorizationsRequest())
-            if auths.authorizations:
-                last = auths.authorizations[0]
-                client._init_connection.device_model = last.device_model
-                client._init_connection.system_version = last.platform
-                print(f"[🛠️] Spoof device: {last.device_model} ({last.platform})")
-            else:
-                raise Exception("tidak ada sesi sebelumnya")
+            try:
+                auths = await client(GetAuthorizationsRequest())
+                if auths.authorizations:
+                    last = auths.authorizations[0]
+                    client._init_connection.device_model = last.device_model
+                    client._init_connection.system_version = last.platform
+                    print(f"[🛠️] Spoof from previous session: {last.device_model} ({last.platform})")
+                else:
+                    raise Exception("Tidak ada riwayat session sebelumnya")
+            except Exception as e:
+                # Gunakan spoof random jika tidak ada history
+                device_model, system_version = random.choice(DEVICE_LIST)
+                client._init_connection.device_model = device_model
+                client._init_connection.system_version = system_version
+                print(f"[🛠️] Spoof fallback: {device_model} ({system_version}) | Alasan: {e}")
         else:
             raise Exception("init_connection tidak tersedia")
+
     except Exception as e:
+        # Jika client belum connect atau spoof gagal, gunakan spoof random
         if not client.is_connected():
             await client.connect()
         if hasattr(client, "_init_connection"):
-            client._init_connection.device_model = fallback_model
-            client._init_connection.system_version = "Android 11"
-        print(f"[🛠️] Spoof default device: {fallback_model} ({e})")
+            device_model, system_version = random.choice(DEVICE_LIST)
+            client._init_connection.device_model = device_model
+            client._init_connection.system_version = system_version
+            print(f"[🛠️] Spoof fallback (connection issue): {device_model} ({system_version}) | Alasan: {e}")
+        else:
+            print(f"[❌] Gagal spoof device: init_connection tidak tersedia | {e}")
+            return  # keluar tanpa spoof
 
+    # Tambahan info umum
     if hasattr(client, "_init_connection"):
         conn = client._init_connection
         conn.app_version = "Telegram Android 10.0.0"
@@ -82,6 +112,7 @@ async def apply_spoof_device(client, phone, fallback_model="Pixel 5"):
         conn.lang_code = "en"
         conn.lang_pack = ""
 
+        # Set lokasi berdasarkan kode negara
         if phone.startswith("+62"):
             conn.country = "ID"
             conn.latitude = -6.2
